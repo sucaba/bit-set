@@ -55,9 +55,13 @@ extern crate rand;
 #[cfg(all(test, feature = "nightly"))]
 extern crate test;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "std"))]
 #[macro_use]
 extern crate std;
+
+#[cfg(not(any(test, feature = "std")))]
+#[macro_use]
+extern crate alloc;
 
 use bit_vec::{BitBlock, BitVec, Blocks};
 use core::cmp;
@@ -65,6 +69,12 @@ use core::cmp::Ordering;
 use core::fmt;
 use core::hash;
 use core::iter::{self, Chain, Enumerate, FromIterator, Repeat, Skip, Take};
+
+#[cfg(feature = "std")]
+use std::vec::Vec;
+
+#[cfg(not(any(test, feature = "std")))]
+use alloc::vec::Vec;
 
 type MatchWords<'a, B> = Chain<Enumerate<Blocks<'a, B>>, Skip<Take<Enumerate<Repeat<B>>>>>;
 
@@ -880,6 +890,8 @@ struct TwoBitPositions<'a, B: 'a> {
 #[derive(Clone)]
 pub struct Iter<'a, B: 'a>(BlockIter<Blocks<'a, B>, B>);
 #[derive(Clone)]
+pub struct IntoIter<B>(BlockIter<<Vec<B> as IntoIterator>::IntoIter, B>);
+#[derive(Clone)]
 pub struct Union<'a, B: 'a>(BlockIter<TwoBitPositions<'a, B>, B>);
 #[derive(Clone)]
 pub struct Intersection<'a, B: 'a>(Take<BlockIter<TwoBitPositions<'a, B>, B>>);
@@ -962,6 +974,19 @@ impl<'a, B: BitBlock> Iterator for Iter<'a, B> {
     }
 }
 
+impl<B: BitBlock> Iterator for IntoIter<B> {
+    type Item = usize;
+
+    #[inline]
+    fn next(&mut self) -> Option<usize> {
+        self.0.next()
+    }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
 impl<'a, B: BitBlock> Iterator for Union<'a, B> {
     type Item = usize;
 
@@ -1023,6 +1048,16 @@ impl<'a, B: BitBlock> IntoIterator for &'a BitSet<B> {
     }
 }
 
+impl<B: BitBlock> IntoIterator for BitSet<B> {
+    type Item = usize;
+    type IntoIter = IntoIter<B>;
+
+    fn into_iter(mut self) -> Self::IntoIter {
+        let storage: Vec<B> = unsafe { core::mem::take(self.bit_vec.storage_mut()) };
+        IntoIter(BlockIter::from_blocks(storage.into_iter()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::BitSet;
@@ -1065,6 +1100,22 @@ mod tests {
         let idxs: Vec<_> = long.iter().collect();
         assert_eq!(idxs, real);
     }
+
+    #[test]
+    fn test_bit_set_into_iterator() {
+        let usizes = vec![0, 2, 2, 3];
+        let bit_vec: BitSet = usizes.into_iter().collect();
+
+        let idxs: Vec<_> = bit_vec.into_iter().collect();
+        assert_eq!(idxs, [0, 2, 3]);
+
+        let long: BitSet = (0..10000).filter(|&n| n % 2 == 0).collect();
+        let real: Vec<_> = (0..10000 / 2).map(|x| x * 2).collect();
+
+        let idxs: Vec<_> = long.into_iter().collect();
+        assert_eq!(idxs, real);
+    }
+
 
     #[test]
     fn test_bit_set_frombit_vec_init() {

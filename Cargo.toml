@@ -1,7 +1,7 @@
 [package]
 name = "bit-set"
-version = "0.5.3"
-authors = ["Alexis Beingessner <a.beingessner@gmail.com>"]
+version = "0.5.4"
+authors = ["Alexis Beingessner <a.beingessner@gmail.com>", "Bogdan Kushnir <warever@gmail.com>"]
 license = "MIT/Apache-2.0"
 description = "A set of bits"
 repository = "https://github.com/contain-rs/bit-set"
